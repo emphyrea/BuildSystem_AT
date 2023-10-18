@@ -1,9 +1,12 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GridBuildingSystem : MonoBehaviour
 {
+    public static GridBuildingSystem Instance;
+
     [SerializeField] private List<PlacedObjectTypeSO> placedObjectTypeSOList;
     private PlacedObjectTypeSO placedObjectTypeSO;
 
@@ -11,8 +14,19 @@ public class GridBuildingSystem : MonoBehaviour
 
     private PlacedObjectTypeSO.Dir dir = PlacedObjectTypeSO.Dir.Down;
 
+    public Action<object, EventArgs> OnSelectedChanged { get; internal set; }
+
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        { 
+            Destroy(this);
+        }
+        else
+        {
+            Instance = this;
+        }
+
         int gridWidth = 25;
         int gridHeight = 25;
         float cellSize = 2f;
@@ -26,7 +40,7 @@ public class GridBuildingSystem : MonoBehaviour
         private GridXZ<GridObject> grid;
         private int x;
         private int z;
-        private Transform transform;
+        private PlacedObject placedObj;
         public GridObject(GridXZ<GridObject> grid, int x, int z)
         {
             this.grid = grid;
@@ -34,24 +48,29 @@ public class GridBuildingSystem : MonoBehaviour
             this.z = z;
         }
 
-        public void SetTransform(Transform transform)
+        public void SetPlacedObj(PlacedObject placedObj)
         {
-            this.transform = transform;
+            this.placedObj = placedObj;
         }
 
-        public void ClearTransform(Transform transform)
+        public void ClearPlacedObj()
         {
-            transform = null;
+            placedObj = null;
+        }
+
+        public PlacedObject GetPlacedObject()
+        {
+            return placedObj;
         }
 
         public bool CanBuild()
         {
-            return transform == null;
+            return placedObj == null;
         }
 
         public override string ToString()
         {
-            return x + "," + z + "\n" + transform;
+            return x + "," + z + "\n" + placedObj;
         }
     }
 
@@ -79,11 +98,11 @@ public class GridBuildingSystem : MonoBehaviour
                 Vector2Int rotationOffset = placedObjectTypeSO.GetRotationOffset(dir);
                 Vector3 placedObjWorldPos = grid.GetWorldPos(x, z) + new Vector3(rotationOffset.x, 0, rotationOffset.y) * grid.GetCellSize();
 
-                Transform builtTrans = Instantiate(placedObjectTypeSO.prefab, placedObjWorldPos, Quaternion.Euler(0, placedObjectTypeSO.GetRotationAngle(dir), 0));
+               PlacedObject placedObj = PlacedObject.Create(placedObjWorldPos, new Vector2Int(x, z), dir, placedObjectTypeSO);
 
                 foreach(Vector2Int gridPos in gridPosList)
                 {
-                    grid.GetGridObject(gridPos.x, gridPos.y).SetTransform(builtTrans); 
+                    grid.GetGridObject(gridPos.x, gridPos.y).SetPlacedObj(placedObj); 
                 }
             }
             else
@@ -107,6 +126,22 @@ public class GridBuildingSystem : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha3))
         {
             placedObjectTypeSO = placedObjectTypeSOList[2];
+        }
+
+        if(Input.GetMouseButtonDown(1))
+        {
+            GridObject gridObj = grid.GetGridObject(Mouse3D.GetMouseWorldPos());
+            PlacedObject placedObj = gridObj.GetPlacedObject();
+            if(placedObj != null)
+            {
+                placedObj.DestroySelf();
+
+                List<Vector2Int> gridPosList = placedObj.GetGridPosList();
+                foreach (Vector2Int gridPos in gridPosList)
+                {
+                    grid.GetGridObject(gridPos.x, gridPos.y).ClearPlacedObj();
+                }
+            }
         }
 
     }
